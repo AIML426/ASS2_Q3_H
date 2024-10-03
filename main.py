@@ -4,6 +4,7 @@ import numpy as np
 import pandas
 import pandas as pd
 import os
+import matplotlib.pyplot as plt
 
 def fitness(individual, items, max_weight):
     """
@@ -13,15 +14,39 @@ def fitness(individual, items, max_weight):
         Return:   If the total weight exceeds the maximum weight capacity, it returns 0 (invalid solution). Otherwise, it returns the 
                     total value       
     """
-    weight = 0
-    value = 0
-    for i, item in enumerate(individual):
-        if item:
-            weight += items['weights'][i]
-            value += items['values'][i]
-    if weight > max_weight:
-        return 0
-    return value
+    total_weight = 0
+    total_value = 0
+    for i, bit in enumerate(individual):
+        if bit:
+            total_weight += items['weights'][i]
+            total_value += items['values'][i]
+    if total_weight > max_weight:
+        penalty = (total_weight - max_weight) ** 2  # Quadratic penalty
+        fitness_score = total_value - penalty
+    else:
+        fitness_score = total_value
+    return fitness_score
+
+def repair_individual(individual, items, max_weight):
+    """
+    Repairs an individual by removing items until the total weight is within the maximum capacity.
+    Items are removed based on the lowest value-to-weight ratio.
+    """
+    total_weight = sum(individual[i] * items['weights'][i] for i in range(len(individual)))
+    if total_weight <= max_weight:
+        return individual  # Individual is already feasible
+    else:
+        # Calculate value-to-weight ratios for items included in the individual
+        included_items = [(i, items['values'][i] / items['weights'][i]) for i in range(len(individual)) if individual[i] == 1]
+        # Sort items by lowest value-to-weight ratio (least valuable per unit weight)
+        included_items.sort(key=lambda x: x[1])
+        # Remove items until the total weight is within capacity
+        for i, _ in included_items:
+            individual[i] = 0  # Remove the item
+            total_weight -= items['weights'][i]
+            if total_weight <= max_weight:
+                break
+        return individual
 
 def create_dataset(file_name):
     """
@@ -105,6 +130,30 @@ def calculate_weighted_probability(ind_fitness, individuals): #, values):
     
     return weighted_probabilities
 
+def plot_curve(best_values):
+    """
+    Plot the average fitness of the best solution weights over generations.
+    
+    Parameters:
+    - best_weights: A list of the best solution weights for each generation.
+    """
+    average_fitness = []
+
+    #for weights in best_weights:
+    #    average_fitness.append(sum(weights) / len(best_weights[0]))
+    #average_fitness.append(sum(best_weights) / len(best_weights))
+
+    average_fitness = np.mean(best_values, axis=0)
+
+    generations = list(range(1, len(average_fitness) + 1))
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(generations, average_fitness, marker='o', linestyle='-', color='b')
+    plt.xlabel('Number of Generations')
+    plt.ylabel('Average Fitness of 5 Best Solution Weights')
+    plt.title('Average Fitness Over Generations')
+    plt.grid(True)
+    plt.show()
 
 def main():
     population_size = 50   # Population size is the number of individuals in each generation
@@ -122,20 +171,25 @@ def main():
         print()
 
         # Reset the best_individual, best_weight, and best_value lists
-        best_individual = None
-        best_value = None
         seletion_size = round(population_size / 2) # The number of individuals to select from intire population, and use them to create offspring
         elitism_size = 2 # The number of individuals to select from intire population, and use them to create offspring
         runs = 5
+        li_best_values_run = [] # list of best values for each run
 
         for run in range(runs):
             best_value = None
             best_individual = None
+            
+            li_best_individuals_gen = [] # list of best individuals for each generation
+            li_best_values_gen = []
             random.seed(seed_[run])  # random seed
-
             # INITIALIZATION: Initialize random individual. then add it to population
             individuals = np.random.randint(2, size=(population_size, item_count))  # It generates a random integer between 0 and 1 (inclusive)
             population = individuals
+
+            # Repair initial population
+            for i in range(population_size):
+                population[i] = repair_individual(population[i], item_dict, max_capacity)
 
             for generation in range(num_generations):
                 # EVALUATE FITNESS: Calculate the fitness of the individual
@@ -169,8 +223,10 @@ def main():
 
                 # TRACK BEST INIVIDUAL: Track the best individual, weight, and value
                 current_best_individual = max(population, key=lambda x: fitness(x, item_dict, max_capacity))
-                #current_best_weight = sum([item_dict['weights'][i] for i, bit in enumerate(current_best_individual) if bit])
                 current_best_value = fitness(current_best_individual, item_dict, max_capacity)
+                # Store the best individual and value for each generation
+                li_best_individuals_gen.append(current_best_individual)
+                li_best_values_gen.append(current_best_value)
                 
                 if best_value is None or current_best_value > best_value:  # Check if the current individual is better than the previous best individual
                     best_individual = current_best_individual
@@ -181,12 +237,30 @@ def main():
                 # Stoping criteria
                 if best_value == optimal_value:
                     break
-        
+            
+            # Store the best value for each run
+            li_best_values_run.append(li_best_values_gen)
+
+
             # Print the results
             print(f"RUN: {run + 1}")
             print(f"Best Individual: {best_individual}")
             print(f"Best Value: {best_value}, at generation {generation + 1}")
             print()
+            #print(f"Average Best Value: {avg_best_value}")
+            #print(f"Standard Deviation of Best Value: {std_best_value}")
+            #print()
+        
+        # Clacular the average value of the best solution weights over generations
+        best_value_each_run = [max(a) for a in li_best_values_run]
+        avg_best_value = sum(best_value_each_run) / runs
+        std_best_value = np.std(best_value_each_run, ddof=1)
+        print(f"Average Best Value: {avg_best_value}")
+        print(f"Standard Deviation of Best Value: {std_best_value}")
+        print()
+
+        # Plot the average fitness of the best solution weights over generations
+        plot_curve(li_best_values_run)
                 
 
 
