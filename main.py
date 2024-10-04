@@ -175,7 +175,7 @@ def main():
         elitism_size = 2 # The number of individuals to select from intire population, and use them to create offspring
         runs = 5
         li_best_values_run = [] # list of best values for each run
-
+    
         for run in range(runs):
             best_value = None
             best_individual = None
@@ -235,8 +235,8 @@ def main():
 
                 
                 # Stoping criteria
-                if best_value == optimal_value:
-                    break
+                #if best_value == optimal_value:
+                #    break
             
             # Store the best value for each run
             li_best_values_run.append(li_best_values_gen)
